@@ -8,7 +8,7 @@ This is the Go port of `floe`, designed for backend services, analytics pipeline
 
 ## Quick Start / Documentation / Examples
 
-- Docs + examples site: [fullstackcraft.github.io/floego](https://fullstackcraft.github.io/floego/)
+- Docs + examples site: [fullstackcraft.github.io/floe-go](https://fullstackcraft.github.io/floe-go/)
 - API docs: [pkg.go.dev/github.com/FullStackCraft/floe-go](https://pkg.go.dev/github.com/FullStackCraft/floe-go)
 - Repository: [github.com/FullStackCraft/floe-go](https://github.com/FullStackCraft/floe-go)
 
