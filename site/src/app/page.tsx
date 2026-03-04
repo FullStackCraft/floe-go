@@ -25,7 +25,7 @@ export default function Home() {
           </p>
           <div className="mt-6">
             <a
-              href="/floego/whitepaper.pdf"
+              href="whitepaper.pdf"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block font-bold text-white bg-[#00ADD8] px-6 py-3 rounded hover:bg-[#0087AB] transition-colors"
