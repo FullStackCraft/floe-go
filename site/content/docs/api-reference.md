@@ -191,3 +191,56 @@ rvResult := rv.ComputeRealizedVolatility(observations)
 obs := volresponse.BuildVolResponseObservation(currentIV, currentRV, currentSpot, nowMs, prevIV, prevSpot)
 result := volresponse.ComputeVolResponseZScore(series, volresponse.VolResponseConfig{})
 ```
+
+## Dataset API Client (`apiclient`)
+
+### `NewApiClient`
+
+```go
+client := apiclient.NewApiClient("YOUR_API_KEY", nil)
+```
+
+### `GetHindsightData`
+
+```go
+events, err := client.GetHindsightData(ctx, apiclient.HindsightDataRequest{
+  StartDate:     "2026-03-01",
+  EndDate:       "2026-03-16",
+  Country:       "US",
+  MinVolatility: 2,
+  Event:         "CPI",
+})
+```
+
+### `GetHindsightSample`
+
+```go
+sample, err := client.GetHindsightSample(ctx)
+```
+
+### `GetDealerMinuteSurfaces`
+
+```go
+rows, err := client.GetDealerMinuteSurfaces(ctx, apiclient.DealerMinuteSurfacesRequest{
+  Symbol:    "SPY",
+  TradeDate: "2026-03-10",
+})
+```
+
+### `GetAMTSessionStats`
+
+```go
+rows, err := client.GetAMTSessionStats(ctx, apiclient.AMTRequest{
+  Symbol:    "NQ",
+  SessionID: "2026-03-10",
+})
+```
+
+### `GetAMTEvents`
+
+```go
+rows, err := client.GetAMTEvents(ctx, apiclient.AMTRequest{
+  Symbol:    "NQ",
+  SessionID: "2026-03-10",
+})
+```

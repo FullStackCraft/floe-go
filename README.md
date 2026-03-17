@@ -65,6 +65,63 @@ func main() {
 }
 ```
 
+## Dataset API Client Example
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/FullStackCraft/floe-go/apiclient"
+)
+
+func main() {
+	client := apiclient.NewApiClient("YOUR_API_KEY", nil)
+	ctx := context.Background()
+
+	hindsight, err := client.GetHindsightData(ctx, apiclient.HindsightDataRequest{
+		StartDate:     "2026-03-01",
+		EndDate:       "2026-03-16",
+		Country:       "US",
+		MinVolatility: 2,
+		Event:         "CPI",
+	})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("hindsight rows: %d\n", len(hindsight))
+
+	rows, err := client.GetDealerMinuteSurfaces(ctx, apiclient.DealerMinuteSurfacesRequest{
+		Symbol:    "SPY",
+		TradeDate: "2026-03-10",
+	})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("dealer minute rows: %d\n", len(rows))
+
+	statsRows, err := client.GetAMTSessionStats(ctx, apiclient.AMTRequest{
+		Symbol:    "NQ",
+		SessionID: "2026-03-10",
+	})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("amt session rows: %d\n", len(statsRows))
+
+	eventRows, err := client.GetAMTEvents(ctx, apiclient.AMTRequest{
+		Symbol:    "NQ",
+		SessionID: "2026-03-10",
+	})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("amt event rows: %d\n", len(eventRows))
+}
+```
+
 ## Package Layout
 
 - `blackscholes` - pricing, Greeks, implied volatility
