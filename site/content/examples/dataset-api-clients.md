@@ -1,6 +1,6 @@
 ---
 title: Dataset API Clients
-description: Query hindsight, dealer, and AMT datasets with apiclient.NewApiClient.
+description: Query hindsight, dealer, AMT, and options screener datasets with apiclient.NewApiClient.
 order: 7
 ---
 
@@ -64,5 +64,45 @@ func main() {
     panic(err)
   }
   fmt.Printf("amt event rows: %d\n", len(eventRows))
+
+  // Wheel Screener
+  wheelData, err := client.GetWheelScreenerData(ctx, apiclient.OptionsScreenerRequest{
+    Strategy: "CC",
+    ExtraParams: map[string]string{
+      "page_size": "10",
+      "min_score": "70",
+      "sector":    "Technology",
+    },
+  })
+  if err != nil {
+    panic(err)
+  }
+  fmt.Printf("wheel screener rows: %d, total: %d\n", len(wheelData.Data), wheelData.Total)
+
+  // LEAPS Screener
+  leapsData, err := client.GetLeapsScreenerData(ctx, apiclient.OptionsScreenerRequest{
+    Strategy: "LC",
+    ExtraParams: map[string]string{
+      "min_dte":   "180",
+      "max_delta": "0.7",
+    },
+  })
+  if err != nil {
+    panic(err)
+  }
+  fmt.Printf("leaps screener rows: %d, total: %d\n", len(leapsData.Data), leapsData.Total)
+
+  // Option Screener
+  optionData, err := client.GetOptionScreenerData(ctx, apiclient.OptionsScreenerRequest{
+    Strategy: "CDS",
+    ExtraParams: map[string]string{
+      "search":    "AAPL",
+      "page_size": "25",
+    },
+  })
+  if err != nil {
+    panic(err)
+  }
+  fmt.Printf("option screener rows: %d, total: %d\n", len(optionData.Data), optionData.Total)
 }
 ```

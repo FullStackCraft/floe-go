@@ -13,20 +13,26 @@ import (
 )
 
 const (
-	defaultHindsightBaseURL = "https://hindsightapi.com/api"
-	defaultDealerBaseURL    = "https://vannacharm.com/api"
-	defaultAMTBaseURL       = "https://amtjoy.com/api"
-	dateLayout              = "2006-01-02"
-	defaultHTTPTimeout      = 30 * time.Second
+	defaultHindsightBaseURL     = "https://hindsightapi.com/api"
+	defaultDealerBaseURL        = "https://vannacharm.com/api"
+	defaultAMTBaseURL           = "https://amtjoy.com/api"
+	defaultWheelScreenerBaseURL = "https://wheelscreener.com/api"
+	defaultLeapsScreenerBaseURL = "https://leapsscreener.com/api"
+	defaultOptionScreenerBaseURL = "https://option-screener.com/api"
+	dateLayout                  = "2006-01-02"
+	defaultHTTPTimeout          = 30 * time.Second
 )
 
-// ApiClient is a unified API client for Hindsight, dealer minute-surface, and AMT data.
+// ApiClient is a unified API client for Hindsight, dealer minute-surface, AMT, and options screener data.
 type ApiClient struct {
-	apiKey           string
-	httpClient       *http.Client
-	hindsightBaseURL string
-	dealerBaseURL    string
-	amtBaseURL       string
+	apiKey                string
+	httpClient            *http.Client
+	hindsightBaseURL      string
+	dealerBaseURL         string
+	amtBaseURL            string
+	wheelScreenerBaseURL  string
+	leapsScreenerBaseURL  string
+	optionScreenerBaseURL string
 }
 
 // NewApiClient returns a configured API client.
@@ -36,11 +42,14 @@ func NewApiClient(apiKey string, httpClient *http.Client) *ApiClient {
 	}
 
 	return &ApiClient{
-		apiKey:           strings.TrimSpace(apiKey),
-		httpClient:       httpClient,
-		hindsightBaseURL: defaultHindsightBaseURL,
-		dealerBaseURL:    defaultDealerBaseURL,
-		amtBaseURL:       defaultAMTBaseURL,
+		apiKey:                strings.TrimSpace(apiKey),
+		httpClient:            httpClient,
+		hindsightBaseURL:      defaultHindsightBaseURL,
+		dealerBaseURL:         defaultDealerBaseURL,
+		amtBaseURL:            defaultAMTBaseURL,
+		wheelScreenerBaseURL:  defaultWheelScreenerBaseURL,
+		leapsScreenerBaseURL:  defaultLeapsScreenerBaseURL,
+		optionScreenerBaseURL: defaultOptionScreenerBaseURL,
 	}
 }
 
@@ -134,6 +143,43 @@ func (c *ApiClient) GetAMTEvents(ctx context.Context, req AMTRequest) ([]AMTEven
 	}
 
 	return decodeAMTEvents(body)
+}
+
+// GetWheelScreenerData retrieves options strategy data from the Wheel Screener API.
+func (c *ApiClient) GetWheelScreenerData(ctx context.Context, req OptionsScreenerRequest) (*OptionsScreenerResponse, error) {
+	return c.getOptionsScreenerData(ctx, c.wheelScreenerBaseURL, "/get-options", req)
+}
+
+// GetLeapsScreenerData retrieves options strategy data from the LEAPS Screener API.
+func (c *ApiClient) GetLeapsScreenerData(ctx context.Context, req OptionsScreenerRequest) (*OptionsScreenerResponse, error) {
+	return c.getOptionsScreenerData(ctx, c.leapsScreenerBaseURL, "/get-options", req)
+}
+
+// GetOptionScreenerData retrieves options strategy data from the Option Screener API.
+func (c *ApiClient) GetOptionScreenerData(ctx context.Context, req OptionsScreenerRequest) (*OptionsScreenerResponse, error) {
+	return c.getOptionsScreenerData(ctx, c.optionScreenerBaseURL, "/getOptionsData", req)
+}
+
+func (c *ApiClient) getOptionsScreenerData(ctx context.Context, baseURL, path string, req OptionsScreenerRequest) (*OptionsScreenerResponse, error) {
+	if err := validateOptionsScreenerRequest(req); err != nil {
+		return nil, err
+	}
+
+	query := url.Values{}
+	query.Set("strategy", strings.ToUpper(strings.TrimSpace(req.Strategy)))
+
+	for k, v := range req.ExtraParams {
+		if strings.TrimSpace(v) != "" {
+			query.Set(k, strings.TrimSpace(v))
+		}
+	}
+
+	body, err := c.getRaw(ctx, baseURL, path, query, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return decodeOptionsScreenerResponse(body)
 }
 
 func (c *ApiClient) getRaw(
@@ -425,6 +471,59 @@ func decodeAMTEvents(body []byte) ([]AMTEventsRow, error) {
 	}
 
 	return nil, errors.New("failed to decode amt events response")
+}
+
+func validateOptionsScreenerRequest(req OptionsScreenerRequest) error {
+	if strings.TrimSpace(req.Strategy) == "" {
+		return errors.New("strategy is required")
+	}
+	return nil
+}
+
+func decodeOptionsScreenerResponse(body []byte) (*OptionsScreenerResponse, error) {
+	var envelope struct {
+		Success              bool             `json:"success"`
+		Data                 []map[string]any `json:"data"`
+		Total                int              `json:"total"`
+		Page                 int              `json:"page"`
+		PageSize             int              `json:"page_size"`
+		Error                string           `json:"error"`
+		Message              string           `json:"message"`
+		SubscriptionEnd      string           `json:"subscriptionEnd"`
+		SubscriptionEndSnake string           `json:"subscription_end"`
+	}
+
+	if err := json.Unmarshal(body, &envelope); err == nil {
+		isEnvelope := envelope.Success || envelope.Data != nil || envelope.Error != "" || envelope.Message != "" || envelope.SubscriptionEnd != "" || envelope.SubscriptionEndSnake != ""
+		if isEnvelope {
+			if !envelope.Success {
+				return nil, &APIError{
+					StatusCode:      http.StatusOK,
+					Message:         firstNonEmpty(envelope.Error, envelope.Message, "request failed"),
+					SubscriptionEnd: firstNonEmpty(envelope.SubscriptionEnd, envelope.SubscriptionEndSnake),
+					RawBody:         string(body),
+				}
+			}
+			return &OptionsScreenerResponse{
+				Data:     envelope.Data,
+				Total:    envelope.Total,
+				Page:     envelope.Page,
+				PageSize: envelope.PageSize,
+			}, nil
+		}
+	}
+
+	var rows []map[string]any
+	if err := json.Unmarshal(body, &rows); err == nil {
+		return &OptionsScreenerResponse{
+			Data:     rows,
+			Total:    len(rows),
+			Page:     1,
+			PageSize: len(rows),
+		}, nil
+	}
+
+	return nil, errors.New("failed to decode options screener response")
 }
 
 func firstNonEmpty(values ...string) string {

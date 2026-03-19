@@ -90,6 +90,20 @@ type AMTEventsRow struct {
 	Events    []map[string]any `json:"events"`
 }
 
+// OptionsScreenerRequest filters options strategy data from Wheel Screener, LEAPS Screener, or Option Screener.
+type OptionsScreenerRequest struct {
+	Strategy    string            `json:"strategy"`
+	ExtraParams map[string]string `json:"-"`
+}
+
+// OptionsScreenerResponse holds paginated options strategy rows.
+type OptionsScreenerResponse struct {
+	Data     []map[string]any `json:"data"`
+	Total    int              `json:"total"`
+	Page     int              `json:"page"`
+	PageSize int              `json:"page_size"`
+}
+
 // APIError represents an API response error.
 type APIError struct {
 	StatusCode      int

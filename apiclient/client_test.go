@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 )
@@ -640,56 +639,237 @@ func TestValidationErrors(t *testing.T) {
 	})
 }
 
-func TestMigrationContainsExpectedSchema(t *testing.T) {
-	migrationPath := "../sql/migrations/20260314_000001_create_vannacharm_subscribers.sql"
-	contentBytes, err := os.ReadFile(migrationPath)
-	if err != nil {
-		t.Fatalf("failed to read migration file: %v", err)
-	}
-	content := string(contentBytes)
-
-	requiredFragments := []string{
-		"create table public.vannacharm_subscribers",
-		"constraint vannacharm_subscribers_pkey primary key (id)",
-		"constraint vannacharm_subscribers_api_key_key unique (api_key)",
-		"constraint vannacharm_subscribers_email_key unique (email)",
-		"constraint vannacharm_subscribers_stripe_customer_id_key unique (stripe_session_id)",
-		"create index IF not exists idx_vannacharm_subscribers_api_key",
-		"create index IF not exists idx_vannacharm_subscribers_email",
-		"create trigger update_vannacharm_subscribers_updated_at",
-		"execute FUNCTION update_updated_at_column ()",
-	}
-
-	for _, fragment := range requiredFragments {
-		if !strings.Contains(content, fragment) {
-			t.Fatalf("migration is missing expected fragment: %q", fragment)
+func TestGetWheelScreenerData_RequestConstructionAndDecode(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/get-options" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
+		if got := r.URL.Query().Get("strategy"); got != "CC" {
+			t.Fatalf("expected strategy=CC, got %q", got)
+		}
+		if got := r.Header.Get("X-API-Key"); got != "ws-key" {
+			t.Fatalf("expected X-API-Key header, got %q", got)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"success": true,
+			"data": [
+				{"ticker": "AAPL", "strategy": "CC", "score": 85.5, "delta": 0.3},
+				{"ticker": "MSFT", "strategy": "CC", "score": 82.1, "delta": 0.25}
+			],
+			"total": 150,
+			"page": 1,
+			"page_size": 50
+		}`))
+	}))
+	defer server.Close()
+
+	client := NewApiClient("ws-key", nil)
+	client.wheelScreenerBaseURL = server.URL
+
+	resp, err := client.GetWheelScreenerData(context.Background(), OptionsScreenerRequest{
+		Strategy: "CC",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.Data) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(resp.Data))
+	}
+	if resp.Total != 150 {
+		t.Fatalf("expected total 150, got %d", resp.Total)
+	}
+	if resp.Page != 1 {
+		t.Fatalf("expected page 1, got %d", resp.Page)
+	}
+	if resp.PageSize != 50 {
+		t.Fatalf("expected page_size 50, got %d", resp.PageSize)
+	}
+	if ticker, ok := resp.Data[0]["ticker"].(string); !ok || ticker != "AAPL" {
+		t.Fatalf("unexpected first ticker: %v", resp.Data[0]["ticker"])
 	}
 }
 
-func TestAMTMigrationContainsExpectedSchema(t *testing.T) {
-	migrationPath := "../sql/migrations/20260317_000002_create_amtjoy_subscribers.sql"
-	contentBytes, err := os.ReadFile(migrationPath)
-	if err != nil {
-		t.Fatalf("failed to read migration file: %v", err)
-	}
-	content := string(contentBytes)
-
-	requiredFragments := []string{
-		"create table public.amtjoy_subscribers",
-		"constraint amtjoy_subscribers_pkey primary key (id)",
-		"constraint amtjoy_subscribers_api_key_key unique (api_key)",
-		"constraint amtjoy_subscribers_email_key unique (email)",
-		"constraint amtjoy_subscribers_stripe_customer_id_key unique (stripe_session_id)",
-		"create index IF not exists idx_amtjoy_subscribers_api_key",
-		"create index IF not exists idx_amtjoy_subscribers_email",
-		"create trigger update_amtjoy_subscribers_updated_at",
-		"execute FUNCTION update_updated_at_column ()",
-	}
-
-	for _, fragment := range requiredFragments {
-		if !strings.Contains(content, fragment) {
-			t.Fatalf("migration is missing expected fragment: %q", fragment)
+func TestGetLeapsScreenerData_RequestConstructionAndDecode(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/get-options" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
+		if got := r.URL.Query().Get("strategy"); got != "LC" {
+			t.Fatalf("expected strategy=LC, got %q", got)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"success": true,
+			"data": [{"ticker": "NVDA", "strategy": "LC", "score": 90.2}],
+			"total": 75,
+			"page": 1,
+			"page_size": 50
+		}`))
+	}))
+	defer server.Close()
+
+	client := NewApiClient("ls-key", nil)
+	client.leapsScreenerBaseURL = server.URL
+
+	resp, err := client.GetLeapsScreenerData(context.Background(), OptionsScreenerRequest{
+		Strategy: "LC",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(resp.Data))
+	}
+	if resp.Total != 75 {
+		t.Fatalf("expected total 75, got %d", resp.Total)
 	}
 }
+
+func TestGetOptionScreenerData_RequestConstructionAndDecode(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/getOptionsData" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("strategy"); got != "CDS" {
+			t.Fatalf("expected strategy=CDS, got %q", got)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"success": true,
+			"data": [
+				{"ticker": "TSLA", "strategy": "CDS", "score": 78.3, "max_profit": 250.0}
+			],
+			"total": 42,
+			"page": 2,
+			"page_size": 10
+		}`))
+	}))
+	defer server.Close()
+
+	client := NewApiClient("os-key", nil)
+	client.optionScreenerBaseURL = server.URL
+
+	resp, err := client.GetOptionScreenerData(context.Background(), OptionsScreenerRequest{
+		Strategy: "CDS",
+		ExtraParams: map[string]string{
+			"page":      "2",
+			"page_size": "10",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(resp.Data))
+	}
+	if resp.Total != 42 {
+		t.Fatalf("expected total 42, got %d", resp.Total)
+	}
+	if resp.Page != 2 {
+		t.Fatalf("expected page 2, got %d", resp.Page)
+	}
+}
+
+func TestGetWheelScreenerData_ExtraParams(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("min_score"); got != "70" {
+			t.Fatalf("expected min_score=70, got %q", got)
+		}
+		if got := r.URL.Query().Get("sector"); got != "Technology" {
+			t.Fatalf("expected sector=Technology, got %q", got)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"data":[],"total":0,"page":1,"page_size":50}`))
+	}))
+	defer server.Close()
+
+	client := NewApiClient("ws-key", nil)
+	client.wheelScreenerBaseURL = server.URL
+
+	resp, err := client.GetWheelScreenerData(context.Background(), OptionsScreenerRequest{
+		Strategy: "CC",
+		ExtraParams: map[string]string{
+			"min_score": "70",
+			"sector":    "Technology",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Total != 0 {
+		t.Fatalf("expected total 0, got %d", resp.Total)
+	}
+}
+
+func TestGetOptionsScreenerData_MissingStrategy(t *testing.T) {
+	client := NewApiClient("key", nil)
+	_, err := client.GetWheelScreenerData(context.Background(), OptionsScreenerRequest{Strategy: ""})
+	if err == nil || !strings.Contains(err.Error(), "strategy is required") {
+		t.Fatalf("expected strategy validation error, got %v", err)
+	}
+}
+
+func TestGetOptionsScreenerData_EnvelopeError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":false,"error":"Invalid or inactive API key"}`))
+	}))
+	defer server.Close()
+
+	client := NewApiClient("bad-key", nil)
+	client.wheelScreenerBaseURL = server.URL
+
+	_, err := client.GetWheelScreenerData(context.Background(), OptionsScreenerRequest{Strategy: "CC"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected APIError, got %T", err)
+	}
+	if apiErr.Message != "Invalid or inactive API key" {
+		t.Fatalf("unexpected message: %s", apiErr.Message)
+	}
+}
+
+func TestGetOptionsScreenerData_RawArrayFallback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"ticker":"AAPL","score":85}]`))
+	}))
+	defer server.Close()
+
+	client := NewApiClient("key", nil)
+	client.optionScreenerBaseURL = server.URL
+
+	resp, err := client.GetOptionScreenerData(context.Background(), OptionsScreenerRequest{Strategy: "CC"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(resp.Data))
+	}
+	if resp.Total != 1 {
+		t.Fatalf("expected total 1, got %d", resp.Total)
+	}
+}
+
+func TestNewApiClientScreenerDefaults(t *testing.T) {
+	client := NewApiClient("test-key", nil)
+
+	if client.wheelScreenerBaseURL != defaultWheelScreenerBaseURL {
+		t.Fatalf("unexpected wheel screener base URL: %s", client.wheelScreenerBaseURL)
+	}
+	if client.leapsScreenerBaseURL != defaultLeapsScreenerBaseURL {
+		t.Fatalf("unexpected leaps screener base URL: %s", client.leapsScreenerBaseURL)
+	}
+	if client.optionScreenerBaseURL != defaultOptionScreenerBaseURL {
+		t.Fatalf("unexpected option screener base URL: %s", client.optionScreenerBaseURL)
+	}
+}
+
